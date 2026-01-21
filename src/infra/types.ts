@@ -24,6 +24,7 @@ export type AppConfig = {
   };
   BATCH_SIZE: number;
   LOOP_TIMEOUT: number;
+  MIN_BATCH_PERCENTAGE: number;
 };
 
 type Status = (typeof HEALTH_STATUSES)[keyof typeof HEALTH_STATUSES];

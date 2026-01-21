@@ -167,9 +167,32 @@ export class TransferAggregator implements IAggregator {
           continue;
         }
 
-        const batchTransferIds = [...new Set(transferStateChanges.map((row) => row.transferId))];
-        // @ts-expect-error{transferStateChanges is undefined}
-        let newLastId = transferStateChanges[transferStateChanges.length - 1].transferStateChangeId;
+        let batchTransferIds = [];
+        let newLastId = lastId;
+        for (const i in transferStateChanges) {
+          // @ts-expect-error{transferStateChanges is undefined}
+          const curStateId = transferStateChanges[i].transferStateChangeId;
+          if ((curStateId - newLastId) > 1) {
+            // If stateIds are not contiguous, if some rows are left behind in the query,
+            // we will cut off the processing here
+            break;
+          }
+
+          batchTransferIds.push(transferStateChanges[i]?.transferId);
+          newLastId = curStateId;
+        }
+
+        // If the remaining batch is not up to the min batch percentage, we will wait and poll again
+        // Because we don't want to poll frequently and stress the system
+        // minBatchPercentage is configurable with env var
+        const curBatchPercentage = (batchTransferIds.length * 100) / this.deps.batchSize;
+        if (curBatchPercentage < this.deps.minBatchPercentage) {
+          await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
+          continue;
+        }
+
+        // Aggregate the transferIds
+        batchTransferIds = [...new Set(batchTransferIds)];
 
         const rawResult = (await this.deps.knexClient.raw(
           `
