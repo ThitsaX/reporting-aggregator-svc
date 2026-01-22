@@ -185,7 +185,7 @@ export class TransferAggregator implements IAggregator {
         // If the remaining batch is not up to the min batch percentage, we will wait and poll again
         // Because we don't want to poll frequently and stress the system
         // minBatchPercentage is configurable with env var
-        const curBatchPercentage = (batchTransferIds.length * 100) / this.deps.batchSize;
+        const curBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
         if (curBatchPercentage < this.deps.minBatchPercentage) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
           continue;
