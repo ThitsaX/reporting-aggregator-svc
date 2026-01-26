@@ -147,6 +147,7 @@ export class TransferAggregator implements IAggregator {
   }
 
   private async processTransactions(): Promise<void> {
+    let waitCount = 0;
     let lastId = await this.deps.stateModel
       .findOne({ process: this.processName })
       .then((doc) => (doc ? doc.lastId : 0));
@@ -174,8 +175,8 @@ export class TransferAggregator implements IAggregator {
           const curStateId = transferStateChanges[i].transferStateChangeId;
           if ((curStateId - newLastId) > 1) {
             // If stateIds are not contiguous, if some rows are left behind in the query,
-            // we will cut off the processing here
-            break;
+            // we will cut off the processing here and wait until maxWaitCount is reached
+            if (waitCount < this.deps.maxWaitCount) break;
           }
 
           batchTransferIds.push(transferStateChanges[i]?.transferId);
@@ -188,6 +189,8 @@ export class TransferAggregator implements IAggregator {
         const curBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
         if (curBatchPercentage < this.deps.minBatchPercentage) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
+          this.deps.logger.info(`Waited for ${this.deps.timeout}ms at id ${newLastId}`);
+          waitCount++;
           continue;
         }
 
@@ -335,6 +338,8 @@ export class TransferAggregator implements IAggregator {
           { upsert: true },
         );
         lastId = newLastId;
+        // Reset the wait count for the next batch
+        waitCount = 0;
 
         this.deps.logger.info(`Processed up to transferStateChangeId ${lastId}`);
       } catch (error) {

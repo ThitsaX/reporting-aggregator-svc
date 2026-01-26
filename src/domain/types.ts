@@ -18,6 +18,7 @@ export type IAggDeps = {
   batchSize: number;
   timeout: number;
   minBatchPercentage: number;
+  maxWaitCount: number;
   logger: ILogger;
 };
 
