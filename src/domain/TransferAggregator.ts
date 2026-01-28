@@ -168,18 +168,17 @@ export class TransferAggregator implements IAggregator {
           continue;
         }
 
-        let batchTransferIds = [];
+        let batchTransferIds: string[] = [];
         let newLastId = lastId;
-        for (const i in transferStateChanges) {
-          // @ts-expect-error{transferStateChanges is undefined}
-          const curStateId = transferStateChanges[i].transferStateChangeId;
+        for (const tfState of transferStateChanges) {
+          const curStateId = tfState.transferStateChangeId;
           if ((curStateId - newLastId) > 1) {
             // If stateIds are not contiguous, if some rows are left behind in the query,
             // we will cut off the processing here and wait until maxWaitCount is reached
             if (waitCount < this.deps.maxWaitCount) break;
           }
 
-          batchTransferIds.push(transferStateChanges[i]?.transferId);
+          batchTransferIds.push(tfState.transferId);
           newLastId = curStateId;
         }
 
