@@ -307,7 +307,6 @@ export class TransferAggregator implements IAggregator {
           const bulkOps = [];
           // Create an array of mongo queries with the processedData
           for (const record of records) {
-            newLastId = record.transferStateChangeId;
             const processedData = await this.processRecord(record);
             if (processedData) {
               bulkOps.push({
