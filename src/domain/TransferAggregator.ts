@@ -173,6 +173,7 @@ export class TransferAggregator implements IAggregator {
         for (const tfState of transferStateChanges) {
           const curStateId = tfState.transferStateChangeId;
           if ((curStateId - newLastId) > 1) {
+            this.deps.logger.info(`Gap detected between ${newLastId} and ${curStateId}`);
             // If stateIds are not contiguous, if some rows are left behind in the query,
             // we will cut off the processing here and wait until maxWaitCount is reached
             if (waitCount < this.deps.maxWaitCount) break;
