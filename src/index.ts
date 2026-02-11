@@ -24,6 +24,8 @@ const start = async () => {
     settlementModel: SettlementModel,
     batchSize: config.get('BATCH_SIZE'),
     timeout: config.get('LOOP_TIMEOUT'),
+    minBatchPercentage: config.get('MIN_BATCH_PERCENTAGE'),
+    maxWaitCount: config.get('MAX_WAIT_COUNT'),
     logger,
   };
   transferAggregator = new TransferAggregator(deps);

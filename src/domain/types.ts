@@ -17,6 +17,8 @@ export type IAggDeps = {
   settlementModel: Model<ISettlement>;
   batchSize: number;
   timeout: number;
+  minBatchPercentage: number;
+  maxWaitCount: number;
   logger: ILogger;
 };
 

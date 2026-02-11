@@ -110,6 +110,18 @@ const config = convict<AppConfig>({
     default: 5000,
     env: 'LOOP_TIMEOUT',
   },
+  MIN_BATCH_PERCENTAGE: {
+    doc: 'Minimum percentage of batch required to be processed before polling again',
+    format: Number,
+    default: 70,
+    env: 'MIN_BATCH_PERCENTAGE',
+  },
+  MAX_WAIT_COUNT: {
+    doc: 'Maximum number of times to wait before skipping missing id(s)',
+    format: Number,
+    default: 3,
+    env: 'MAX_WAIT_COUNT',
+  },
 });
 
 if (process.env['REPORTING_MYSQL_DB_SSL_ENABLED'] === 'true') {

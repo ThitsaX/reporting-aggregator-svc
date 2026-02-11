@@ -147,6 +147,7 @@ export class TransferAggregator implements IAggregator {
   }
 
   private async processTransactions(): Promise<void> {
+    let waitCount = 0;
     let lastId = await this.deps.stateModel
       .findOne({ process: this.processName })
       .then((doc) => (doc ? doc.lastId : 0));
@@ -167,9 +168,34 @@ export class TransferAggregator implements IAggregator {
           continue;
         }
 
-        const batchTransferIds = [...new Set(transferStateChanges.map((row) => row.transferId))];
-        // @ts-expect-error{transferStateChanges is undefined}
-        let newLastId = transferStateChanges[transferStateChanges.length - 1].transferStateChangeId;
+        let batchTransferIds: string[] = [];
+        let newLastId = lastId;
+        for (const tfState of transferStateChanges) {
+          const curStateId = tfState.transferStateChangeId;
+          if ((curStateId - newLastId) > 1) {
+            this.deps.logger.info(`Gap detected between ${newLastId} and ${curStateId}`);
+            // If stateIds are not contiguous, if some rows are left behind in the query,
+            // we will cut off the processing here and wait until maxWaitCount is reached
+            if (waitCount < this.deps.maxWaitCount) break;
+          }
+
+          batchTransferIds.push(tfState.transferId);
+          newLastId = curStateId;
+        }
+
+        // If the remaining batch is not up to the min batch percentage, we will wait and poll again
+        // Because we don't want to poll frequently and stress the system
+        // minBatchPercentage is configurable with env var
+        const curBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
+        if (curBatchPercentage < this.deps.minBatchPercentage) {
+          await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
+          this.deps.logger.info(`Waited for ${this.deps.timeout}ms at id ${newLastId}`);
+          waitCount++;
+          continue;
+        }
+
+        // Aggregate the transferIds
+        batchTransferIds = [...new Set(batchTransferIds)];
 
         const rawResult = (await this.deps.knexClient.raw(
           `
@@ -281,7 +307,6 @@ export class TransferAggregator implements IAggregator {
           const bulkOps = [];
           // Create an array of mongo queries with the processedData
           for (const record of records) {
-            newLastId = record.transferStateChangeId;
             const processedData = await this.processRecord(record);
             if (processedData) {
               bulkOps.push({
@@ -312,6 +337,8 @@ export class TransferAggregator implements IAggregator {
           { upsert: true },
         );
         lastId = newLastId;
+        // Reset the wait count for the next batch
+        waitCount = 0;
 
         this.deps.logger.info(`Processed up to transferStateChangeId ${lastId}`);
       } catch (error) {
