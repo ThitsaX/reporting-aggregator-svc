@@ -46,6 +46,12 @@ const config = convict<AppConfig>({
       default: {},
       env: 'REPORTING_MYSQL_DB_ADDITIONAL_CONNECTION_OPTIONS',
     },
+    QUERY_TIMEOUT_MS: {
+      doc: 'Query timeout for each polling',
+      format: Number,
+      default: 10000,
+      env: 'QUERY_TIMEOUT_MS',
+    },
   },
   REPORTING_MONGO_DB: {
     HOST: {
@@ -78,6 +84,12 @@ const config = convict<AppConfig>({
       format: '*',
       default: 'admin',
       env: 'REPORTING_MONGO_DB_DATABASE',
+    },
+    SOCKET_TIMEOUT_MS: {
+      doc: 'Socket timeout for killing slow operations',
+      format: Number,
+      default: 10000,
+      env: 'SOCKET_TIMEOUT_MS',
     },
     PARAMS: {
       doc: 'Additional parameters for MongoDB connection',

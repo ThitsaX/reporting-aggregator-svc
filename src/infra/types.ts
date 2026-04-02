@@ -9,6 +9,7 @@ export type AppConfig = {
     USER: string;
     PASSWORD: string;
     SCHEMA: string;
+    QUERY_TIMEOUT_MS: number;
     ADDITIONAL_CONNECTION_OPTIONS?: Record<string, unknown>
   };
   REPORTING_MONGO_DB: {
@@ -17,6 +18,7 @@ export type AppConfig = {
     USER: string;
     PASSWORD: string;
     DATABASE: string;
+    SOCKET_TIMEOUT_MS: number;
     PARAMS: Record<string, unknown>; // Additional parameters for MongoDB connection
     SSL_ENABLED?: boolean; // Optional, defaults to false
     SSL_VERIFY?: boolean; // Optional, defaults to true

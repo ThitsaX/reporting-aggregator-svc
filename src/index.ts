@@ -26,6 +26,7 @@ const start = async () => {
     timeout: config.get('LOOP_TIMEOUT'),
     minBatchPercentage: config.get('MIN_BATCH_PERCENTAGE'),
     maxWaitCount: config.get('MAX_WAIT_COUNT'),
+    queryTimeout: config.get('REPORTING_MYSQL_DB.QUERY_TIMEOUT_MS'),
     logger,
   };
   transferAggregator = new TransferAggregator(deps);

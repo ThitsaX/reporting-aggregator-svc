@@ -198,106 +198,109 @@ export class TransferAggregator implements IAggregator {
         batchTransferIds = [...new Set(batchTransferIds)];
 
         const rawResult = (await this.deps.knexClient.raw(
-          `
-          SELECT 
-            transfer.transferId,
-            q.transactionReferenceId as transactionId,
-            ft.sourceAmount,
-            ft.sourceCurrency,
-            ft.targetAmount,
-            ft.targetCurrency,
-            transfer.createdDate as createdAt,
-            transfer.amount,
-            transfer.currencyId AS currency,
-            tsc.transferStateChangeId AS transferStateChangeId,
-            tsc.transferStateId AS transferStateChangeState,
-            tsc.reason AS transferStateChangeReason,
-            tsc.createdDate AS transferStateChangeDateTime,
-            ts.enumeration AS transferStateEnum,
-            ts2.name as transactionType,
-            tss.name AS transactionSubScenario,
-            ti.name AS transactionInitiator,
-            tit.name AS transactionInitiatorType,
-            te.errorCode,
-            te.errorDescription,
-            CASE WHEN da.isProxy = 0 THEN da.name ELSE ep1.name END as payerDFSP,
-            CASE WHEN da.isProxy = 1 THEN da.name ELSE NULL END as payerDFSPProxy,
-            da.description AS payerDesc,
-            CASE WHEN ca.isProxy = 0 THEN ca.name ELSE ep2.name END as payeeDFSP,
-            CASE WHEN ca.isProxy = 1 THEN ca.name ELSE NULL END as payeeDFSPProxy,
-            ca.description AS payeeDesc,
-            payerpit.name as payerPartyIdType,
-            qp1.partyIdentifierValue as payerPartyIdentifier,
-            qp1.partyName as payerPartyName,
-            payeepit.name as payeePartyIdType,
-            qp2.partyIdentifierValue as payeePartyIdentifier,
-            qp2.partyName as payeePartyName,
-            qr.quoteId,
-            at2.name as quoteRequestAmountType,
-            q.currencyId as quoteRequestCurrency,
-            q.amount as quoteRequestAmount,
-            qr.transferAmount as transferTermsTransferAmount,
-            qr.transferAmountCurrencyId as transferTermsTransferCurrency,
-            qr.payeeReceiveAmountCurrencyId as transferTermsPayeeReceiveCurrency,
-            qr.payeeReceiveAmount as transferTermsPayeeReceiveAmount,
-            qr.payeeFspFeeAmount as transferTermsPayeeFspFeeAmount,
-            qr.payeeFspFeeCurrencyId as transferTermsPayeeFspFeeCurrency,
-            qr.payeeFspCommissionCurrencyId as transferTermsPayeeFspCommissionCurrency,
-            qr.payeeFspCommissionAmount as transferTermsPayeeFspCommissionAmount,
-            qr.responseExpirationDate as transferTermsExpiration,
-            ilpp.value as ilpPacket,
-            pa.name as positionChangesParticipantName,
-            pc3.currencyId as positionChangesCurrency,
-            lat.name as positionChangesLedgerType,
-            ppc.createdDate as positionChangesDateTime,
-            ppc.value as positionChangesUpdatedValue,
-            ppc.change as positionChangesChange,
-            tf.settlementWindowId as transferSettlementWindowId,
-            gc.latitude as geoCodeLatitude,
-            gc.longitude as geoCodeLongitude,
-            tss.name AS baseUseCase 
-          FROM transfer
-            INNER JOIN transferParticipant AS tp1 ON tp1.transferId = transfer.transferId
-            LEFT JOIN externalParticipant AS ep1 ON ep1.externalParticipantId = tp1.externalParticipantId
-            INNER JOIN transferParticipantRoleType AS tprt1 ON tprt1.transferParticipantRoleTypeId = tp1.transferParticipantRoleTypeId
-            INNER JOIN participant AS da ON da.participantId = tp1.participantId
-            LEFT JOIN participantCurrency AS pc1 ON pc1.participantCurrencyId = tp1.participantCurrencyId
-            INNER JOIN transferParticipant AS tp2 ON tp2.transferId = transfer.transferId
-            LEFT JOIN externalParticipant AS ep2 ON ep2.externalParticipantId = tp2.externalParticipantId
-            INNER JOIN transferParticipantRoleType AS tprt2 ON tprt2.transferParticipantRoleTypeId = tp2.transferParticipantRoleTypeId
-            INNER JOIN participant AS ca ON ca.participantId = tp2.participantId
-            LEFT JOIN participantCurrency AS pc2 ON pc2.participantCurrencyId = tp2.participantCurrencyId
-            INNER JOIN ilpPacket AS ilpp ON ilpp.transferId = transfer.transferId
-            LEFT JOIN transferStateChange AS tsc ON tsc.transferId = transfer.transferId
-              AND tsc.transferStateChangeId = (
-                SELECT MAX(transferStateChangeId) FROM transferStateChange tsctmp WHERE tsctmp.transferId = transfer.transferId
-              )
-            LEFT JOIN transferState AS ts ON ts.transferStateId = tsc.transferStateId
-            LEFT JOIN transferFulfilment AS tf ON tf.transferId = transfer.transferId
-            LEFT JOIN transferError AS te ON te.transferId = transfer.transferId
-            LEFT JOIN fxTransfer AS ft ON ft.determiningTransferId = transfer.transferId
-            INNER JOIN quote AS q ON q.transactionReferenceId = transfer.transferId
-            INNER JOIN transactionScenario AS ts2 ON ts2.transactionScenarioId = q.transactionScenarioId
-            INNER JOIN transactionSubScenario AS tss ON tss.transactionSubScenarioId = q.transactionSubScenarioId
-            INNER JOIN transactionInitiator AS ti ON ti.transactionInitiatorId = q.transactionInitiatorId
-            INNER JOIN transactionInitiatorType AS tit ON tit.transactionInitiatorTypeId = q.transactionInitiatorTypeId
-            INNER JOIN quoteParty AS qp1 ON q.quoteId = qp1.quoteId AND qp1.partyTypeId = tprt1.transferParticipantRoleTypeId
-            INNER JOIN quoteParty AS qp2 ON q.quoteId = qp2.quoteId AND qp2.partyTypeId = tprt2.transferParticipantRoleTypeId
-            INNER JOIN partyIdentifierType AS payerpit ON payerpit.partyIdentifierTypeId = qp1.partyIdentifierTypeId
-            INNER JOIN partyIdentifierType AS payeepit ON payeepit.partyIdentifierTypeId = qp2.partyIdentifierTypeId
-            INNER JOIN quoteResponse AS qr ON qr.quoteId = q.quoteId
-            INNER JOIN amountType at2 ON q.amountTypeId = at2.amountTypeId
-            LEFT JOIN participantPositionChange ppc ON ppc.transferStateChangeId = tsc.transferStateChangeId
-            LEFT JOIN participantCurrency pc3 ON pc3.participantCurrencyId = ppc.participantCurrencyId
-            LEFT JOIN participant pa ON pa.participantId = pc3.participantId
-            LEFT JOIN ledgerAccountType lat ON lat.ledgerAccountTypeId = pc3.ledgerAccountTypeId
-            LEFT JOIN geoCode gc ON gc.quotePartyId = qp2.quotePartyId
-          WHERE transfer.transferId IN (${Array(batchTransferIds.length).fill('?').join(',')})
-            AND tprt1.name = 'PAYER_DFSP'
-            AND tprt2.name = 'PAYEE_DFSP'
-          ORDER BY tsc.transferStateChangeId
-          `,
-          batchTransferIds,
+          {
+            sql: `
+              SELECT 
+                transfer.transferId,
+                q.transactionReferenceId as transactionId,
+                ft.sourceAmount,
+                ft.sourceCurrency,
+                ft.targetAmount,
+                ft.targetCurrency,
+                transfer.createdDate as createdAt,
+                transfer.amount,
+                transfer.currencyId AS currency,
+                tsc.transferStateChangeId AS transferStateChangeId,
+                tsc.transferStateId AS transferStateChangeState,
+                tsc.reason AS transferStateChangeReason,
+                tsc.createdDate AS transferStateChangeDateTime,
+                ts.enumeration AS transferStateEnum,
+                ts2.name as transactionType,
+                tss.name AS transactionSubScenario,
+                ti.name AS transactionInitiator,
+                tit.name AS transactionInitiatorType,
+                te.errorCode,
+                te.errorDescription,
+                CASE WHEN da.isProxy = 0 THEN da.name ELSE ep1.name END as payerDFSP,
+                CASE WHEN da.isProxy = 1 THEN da.name ELSE NULL END as payerDFSPProxy,
+                da.description AS payerDesc,
+                CASE WHEN ca.isProxy = 0 THEN ca.name ELSE ep2.name END as payeeDFSP,
+                CASE WHEN ca.isProxy = 1 THEN ca.name ELSE NULL END as payeeDFSPProxy,
+                ca.description AS payeeDesc,
+                payerpit.name as payerPartyIdType,
+                qp1.partyIdentifierValue as payerPartyIdentifier,
+                qp1.partyName as payerPartyName,
+                payeepit.name as payeePartyIdType,
+                qp2.partyIdentifierValue as payeePartyIdentifier,
+                qp2.partyName as payeePartyName,
+                qr.quoteId,
+                at2.name as quoteRequestAmountType,
+                q.currencyId as quoteRequestCurrency,
+                q.amount as quoteRequestAmount,
+                qr.transferAmount as transferTermsTransferAmount,
+                qr.transferAmountCurrencyId as transferTermsTransferCurrency,
+                qr.payeeReceiveAmountCurrencyId as transferTermsPayeeReceiveCurrency,
+                qr.payeeReceiveAmount as transferTermsPayeeReceiveAmount,
+                qr.payeeFspFeeAmount as transferTermsPayeeFspFeeAmount,
+                qr.payeeFspFeeCurrencyId as transferTermsPayeeFspFeeCurrency,
+                qr.payeeFspCommissionCurrencyId as transferTermsPayeeFspCommissionCurrency,
+                qr.payeeFspCommissionAmount as transferTermsPayeeFspCommissionAmount,
+                qr.responseExpirationDate as transferTermsExpiration,
+                ilpp.value as ilpPacket,
+                pa.name as positionChangesParticipantName,
+                pc3.currencyId as positionChangesCurrency,
+                lat.name as positionChangesLedgerType,
+                ppc.createdDate as positionChangesDateTime,
+                ppc.value as positionChangesUpdatedValue,
+                ppc.change as positionChangesChange,
+                tf.settlementWindowId as transferSettlementWindowId,
+                gc.latitude as geoCodeLatitude,
+                gc.longitude as geoCodeLongitude,
+                tss.name AS baseUseCase 
+              FROM transfer
+                INNER JOIN transferParticipant AS tp1 ON tp1.transferId = transfer.transferId
+                LEFT JOIN externalParticipant AS ep1 ON ep1.externalParticipantId = tp1.externalParticipantId
+                INNER JOIN transferParticipantRoleType AS tprt1 ON tprt1.transferParticipantRoleTypeId = tp1.transferParticipantRoleTypeId
+                INNER JOIN participant AS da ON da.participantId = tp1.participantId
+                LEFT JOIN participantCurrency AS pc1 ON pc1.participantCurrencyId = tp1.participantCurrencyId
+                INNER JOIN transferParticipant AS tp2 ON tp2.transferId = transfer.transferId
+                LEFT JOIN externalParticipant AS ep2 ON ep2.externalParticipantId = tp2.externalParticipantId
+                INNER JOIN transferParticipantRoleType AS tprt2 ON tprt2.transferParticipantRoleTypeId = tp2.transferParticipantRoleTypeId
+                INNER JOIN participant AS ca ON ca.participantId = tp2.participantId
+                LEFT JOIN participantCurrency AS pc2 ON pc2.participantCurrencyId = tp2.participantCurrencyId
+                INNER JOIN ilpPacket AS ilpp ON ilpp.transferId = transfer.transferId
+                LEFT JOIN transferStateChange AS tsc ON tsc.transferId = transfer.transferId
+                  AND tsc.transferStateChangeId = (
+                    SELECT MAX(transferStateChangeId) FROM transferStateChange tsctmp WHERE tsctmp.transferId = transfer.transferId
+                  )
+                LEFT JOIN transferState AS ts ON ts.transferStateId = tsc.transferStateId
+                LEFT JOIN transferFulfilment AS tf ON tf.transferId = transfer.transferId
+                LEFT JOIN transferError AS te ON te.transferId = transfer.transferId
+                LEFT JOIN fxTransfer AS ft ON ft.determiningTransferId = transfer.transferId
+                INNER JOIN quote AS q ON q.transactionReferenceId = transfer.transferId
+                INNER JOIN transactionScenario AS ts2 ON ts2.transactionScenarioId = q.transactionScenarioId
+                INNER JOIN transactionSubScenario AS tss ON tss.transactionSubScenarioId = q.transactionSubScenarioId
+                INNER JOIN transactionInitiator AS ti ON ti.transactionInitiatorId = q.transactionInitiatorId
+                INNER JOIN transactionInitiatorType AS tit ON tit.transactionInitiatorTypeId = q.transactionInitiatorTypeId
+                INNER JOIN quoteParty AS qp1 ON q.quoteId = qp1.quoteId AND qp1.partyTypeId = tprt1.transferParticipantRoleTypeId
+                INNER JOIN quoteParty AS qp2 ON q.quoteId = qp2.quoteId AND qp2.partyTypeId = tprt2.transferParticipantRoleTypeId
+                INNER JOIN partyIdentifierType AS payerpit ON payerpit.partyIdentifierTypeId = qp1.partyIdentifierTypeId
+                INNER JOIN partyIdentifierType AS payeepit ON payeepit.partyIdentifierTypeId = qp2.partyIdentifierTypeId
+                INNER JOIN quoteResponse AS qr ON qr.quoteId = q.quoteId
+                INNER JOIN amountType at2 ON q.amountTypeId = at2.amountTypeId
+                LEFT JOIN participantPositionChange ppc ON ppc.transferStateChangeId = tsc.transferStateChangeId
+                LEFT JOIN participantCurrency pc3 ON pc3.participantCurrencyId = ppc.participantCurrencyId
+                LEFT JOIN participant pa ON pa.participantId = pc3.participantId
+                LEFT JOIN ledgerAccountType lat ON lat.ledgerAccountTypeId = pc3.ledgerAccountTypeId
+                LEFT JOIN geoCode gc ON gc.quotePartyId = qp2.quotePartyId
+              WHERE transfer.transferId IN (?)
+                AND tprt1.name = 'PAYER_DFSP'
+                AND tprt2.name = 'PAYEE_DFSP'
+              ORDER BY tsc.transferStateChangeId
+              `,
+            bindings: [batchTransferIds],
+            timeout: this.deps.queryTimeout
+          }
         )) as KnexRawResult;
 
         const records: Record[] = rawResult[0];
