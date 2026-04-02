@@ -20,6 +20,7 @@ export type IAggDeps = {
   minBatchPercentage: number;
   maxWaitCount: number;
   queryTimeout: number;
+  bulkWriteSize: number;
   logger: ILogger;
 };
 

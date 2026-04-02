@@ -91,6 +91,12 @@ const config = convict<AppConfig>({
       default: 10000,
       env: 'SOCKET_TIMEOUT_MS',
     },
+    BULK_WRITE_SIZE: {
+      doc: 'Total records in a smaller sub batch to bulk write to mongodb',
+      format: Number,
+      default: 1000,
+      env: 'BULK_WRITE_SIZE',
+    },
     PARAMS: {
       doc: 'Additional parameters for MongoDB connection',
       format: function (val) {

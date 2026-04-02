@@ -19,6 +19,7 @@ export type AppConfig = {
     PASSWORD: string;
     DATABASE: string;
     SOCKET_TIMEOUT_MS: number;
+    BULK_WRITE_SIZE: number;
     PARAMS: Record<string, unknown>; // Additional parameters for MongoDB connection
     SSL_ENABLED?: boolean; // Optional, defaults to false
     SSL_VERIFY?: boolean; // Optional, defaults to true
