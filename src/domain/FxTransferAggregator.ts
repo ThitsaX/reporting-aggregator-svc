@@ -43,6 +43,7 @@ interface ConversionRecord {
 }
 
 interface ChargeRecord {
+  commitRequestId: string;
   determiningTransferId: string;
   chargeType: string;
   sourceAmount: number;
@@ -176,6 +177,10 @@ export class FxTransferAggregator implements IAggregator {
         // @ts-expect-error { Object might be undefined }
         let newLastId = fxStateChanges[fxStateChanges.length - 1].fxTransferStateChangeId;
         const mongoBatch = [];
+        const fxTransferStateChangeIds = fxStateChanges.map((row) => row.fxTransferStateChangeId);
+        const commitRequestIds = [...new Set(fxStateChanges.map((row) => row.commitRequestId))];
+        const stateChangePlaceholders = fxTransferStateChangeIds.map(() => '?').join(',');
+        const commitRequestPlaceholders = commitRequestIds.map(() => '?').join(',');
 
         const conversionQuery = `
           SELECT 
@@ -217,13 +222,12 @@ export class FxTransferAggregator implements IAggregator {
           INNER JOIN participant AS cp ON cp.participantId = ftp.participantId
           INNER JOIN transferParticipantRoleType ftprt ON ftprt.transferParticipantRoleTypeId = ftp.transferParticipantRoleTypeId
           WHERE ftprt.name = 'COUNTER_PARTY_FSP'
-          AND ft.commitRequestId = ?
-          AND ftsc.fxTransferStateChangeId = ?
-          LIMIT 1;
+          AND ftsc.fxTransferStateChangeId IN (${stateChangePlaceholders});
         `;
 
         const chargesQuery = `
           SELECT
+            ft.commitRequestId,
             ft.determiningTransferId,
             fc.chargeType,
             fc.sourceAmount,
@@ -232,24 +236,31 @@ export class FxTransferAggregator implements IAggregator {
             fc.targetCurrency
           FROM fxTransfer ft
           JOIN fxCharge fc ON fc.conversionId = ft.commitRequestId
-          WHERE ft.commitRequestId = ?;
+          WHERE ft.commitRequestId IN (${commitRequestPlaceholders});
         `;
+
+        const convResult = await this.deps.knexClient.raw(conversionQuery, fxTransferStateChangeIds);
+        const conversions = convResult[0] as ConversionRecord[];
+        const conversionByStateChangeId = new Map(
+          conversions.map((conversion) => [conversion.fxTransferStateChangeId, conversion]),
+        );
+
+        const chargesResult = await this.deps.knexClient.raw(chargesQuery, commitRequestIds);
+        const charges = chargesResult[0] as ChargeRecord[];
+        const chargesByCommitRequestId = new Map<string, ChargeRecord[]>();
+        for (const charge of charges) {
+          const existing = chargesByCommitRequestId.get(charge.commitRequestId) ?? [];
+          existing.push(charge);
+          chargesByCommitRequestId.set(charge.commitRequestId, existing);
+        }
 
         for (const row of fxStateChanges) {
           const { fxTransferStateChangeId, commitRequestId } = row;
-
-          const convResult = await this.deps.knexClient.raw(conversionQuery, [
-            commitRequestId,
-            fxTransferStateChangeId,
-          ]);
-          const conv: ConversionRecord = convResult[0][0];
+          const conv = conversionByStateChangeId.get(fxTransferStateChangeId);
           if (!conv) continue;
 
-          const chargesResult = await this.deps.knexClient.raw(chargesQuery, [commitRequestId]);
-          const charges: ChargeRecord[] = chargesResult[0];
-
           newLastId = row.fxTransferStateChangeId;
-          const processedData = await this.processRecord(conv, charges);
+          const processedData = await this.processRecord(conv, chargesByCommitRequestId.get(commitRequestId) ?? []);
           if (processedData) {
             mongoBatch.push({
               updateOne: {
