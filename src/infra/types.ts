@@ -23,6 +23,7 @@ export type AppConfig = {
     SSL_CA_FILE_PATH?: string; // Optional, CA certificate file path
   };
   BATCH_SIZE: number;
+  TRANSFER_DETAILS_BATCH_SIZE: number;
   LOOP_TIMEOUT: number;
   MIN_BATCH_PERCENTAGE: number;
   MAX_WAIT_COUNT: number;

@@ -1,9 +1,6 @@
 import { ITransaction } from '#src/schemas';
 import { IAggregator, IAggDeps, TransferStateChange, Record, KnexRawResult } from '../types';
 
-const FINAL_TRANSFER_STATES = ['COMMITTED', 'ABORTED', 'FAILED'];
-const TRANSFER_DETAILS_BATCH_SIZE = 1000;
-
 type PositionChangeRecord = {
   transferId: string;
   participantName?: string;
@@ -58,7 +55,7 @@ export class TransferAggregator implements IAggregator {
   }
 
   private chunkTransferIds(transferIds: string[]): string[][] {
-    const chunkSize = Math.min(this.deps.batchSize, TRANSFER_DETAILS_BATCH_SIZE);
+    const chunkSize = Math.min(this.deps.batchSize, this.deps.transferDetailsBatchSize);
     const chunks: string[][] = [];
 
     for (let index = 0; index < transferIds.length; index += chunkSize) {
@@ -356,6 +353,7 @@ export class TransferAggregator implements IAggregator {
   }
 
   private async processTransactions(): Promise<void> {
+    let waitCount = 0;
     let lastId = await this.deps.stateModel
       .findOne({ process: this.processName })
       .then((doc) => (doc ? doc.lastId : 0));
@@ -366,7 +364,6 @@ export class TransferAggregator implements IAggregator {
           .knexClient('transferStateChange')
           .select('transferId', 'transferStateChangeId')
           .where('transferStateChangeId', '>', lastId)
-          .whereIn('transferStateId', FINAL_TRANSFER_STATES)
           .orderBy('transferStateChangeId')
           .limit(this.deps.batchSize);
 
@@ -375,17 +372,34 @@ export class TransferAggregator implements IAggregator {
           continue;
         }
 
-        const latestTransferStateChange = transferStateChanges[transferStateChanges.length - 1];
-        if (!latestTransferStateChange) {
+        let batchTransferIds: string[] = [];
+        let newLastId = lastId;
+        const selectedTransferStateChanges: TransferStateChange[] = [];
+
+        for (const transferStateChange of transferStateChanges) {
+          const currentStateId = transferStateChange.transferStateChangeId;
+          if ((currentStateId - newLastId) > 1) {
+            this.deps.logger.info(`Gap detected between ${newLastId} and ${currentStateId}`);
+            if (waitCount < this.deps.maxWaitCount) break;
+          }
+
+          batchTransferIds.push(transferStateChange.transferId);
+          selectedTransferStateChanges.push(transferStateChange);
+          newLastId = currentStateId;
+        }
+
+        const currentBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
+        if (currentBatchPercentage < this.deps.minBatchPercentage) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
+          this.deps.logger.info(`Waited for ${this.deps.timeout}ms at id ${newLastId}`);
+          waitCount++;
           continue;
         }
 
-        const newLastId = latestTransferStateChange.transferStateChangeId;
+        batchTransferIds = [...new Set(batchTransferIds)];
         this.transferStateChangeIdByTransferId = new Map(
-          transferStateChanges.map((row) => [row.transferId, row.transferStateChangeId]),
+          selectedTransferStateChanges.map((row) => [row.transferId, row.transferStateChangeId]),
         );
-        const batchTransferIds = [...this.transferStateChangeIdByTransferId.keys()];
         const transactionsByTransferId = new Map<string, ITransaction>();
 
         for (const transferIdChunk of this.chunkTransferIds(batchTransferIds)) {
@@ -452,6 +466,7 @@ export class TransferAggregator implements IAggregator {
           { upsert: true },
         );
         lastId = newLastId;
+        waitCount = 0;
 
         this.deps.logger.info(`Processed up to transferStateChangeId ${lastId}`);
       } catch (error) {
