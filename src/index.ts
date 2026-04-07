@@ -27,6 +27,7 @@ const start = async () => {
     minBatchPercentage: config.get('MIN_BATCH_PERCENTAGE'),
     maxWaitCount: config.get('MAX_WAIT_COUNT'),
     queryTimeout: config.get('REPORTING_MYSQL_DB.QUERY_TIMEOUT_MS'),
+    bulkWriteTimeout: config.get('REPORTING_MONGO_DB.BULK_WRITE_TIMEOUT_MS'),
     bulkWriteSize: config.get('REPORTING_MONGO_DB.BULK_WRITE_SIZE'),
     logger,
   };

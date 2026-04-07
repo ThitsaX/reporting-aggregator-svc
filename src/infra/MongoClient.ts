@@ -36,7 +36,6 @@ export async function initializeMongoClient(): Promise<void> {
   await connect(uri, {
     autoIndex: false,
     dbName: mongoConfig.DATABASE,
-    socketTimeoutMS: mongoConfig.SOCKET_TIMEOUT_MS,
     tls: tlsEnabled,
     tlsAllowInvalidCertificates,
     ...(tlsCAFilePath ? { tlsCAFile: tlsCAFilePath } : {})

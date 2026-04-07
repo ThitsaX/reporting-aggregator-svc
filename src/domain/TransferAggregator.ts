@@ -326,7 +326,9 @@ export class TransferAggregator implements IAggregator {
 
               for (let i = 0; i < bulkOps.length; i += BULK_WRITE_SIZE) {
                 const batch = bulkOps.slice(i, i + BULK_WRITE_SIZE);
-                await this.deps.transactionModel.bulkWrite(batch);
+                await this.deps.transactionModel.bulkWrite(batch, {
+                  timeoutMS: this.deps.bulkWriteTimeout
+                });
               }
             } catch (error) {
               this.deps.logger.error(`Bulk upsert failed for ${this.processName}`, error);

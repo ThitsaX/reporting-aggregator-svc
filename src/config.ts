@@ -49,7 +49,7 @@ const config = convict<AppConfig>({
     QUERY_TIMEOUT_MS: {
       doc: 'Query timeout for each polling',
       format: Number,
-      default: 10000,
+      default: 30000,
       env: 'QUERY_TIMEOUT_MS',
     },
   },
@@ -85,11 +85,11 @@ const config = convict<AppConfig>({
       default: 'admin',
       env: 'REPORTING_MONGO_DB_DATABASE',
     },
-    SOCKET_TIMEOUT_MS: {
-      doc: 'Socket timeout for killing slow operations',
+    BULK_WRITE_TIMEOUT_MS: {
+      doc: 'Operation timeout for killing slow bulk writes',
       format: Number,
-      default: 10000,
-      env: 'SOCKET_TIMEOUT_MS',
+      default: 30000,
+      env: 'BULK_WRITE_TIMEOUT_MS',
     },
     BULK_WRITE_SIZE: {
       doc: 'Total records in a smaller sub batch to bulk write to mongodb',
