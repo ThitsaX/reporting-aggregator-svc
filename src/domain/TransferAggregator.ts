@@ -209,7 +209,7 @@ export class TransferAggregator implements IAggregator {
       ORDER BY tsc.transferStateChangeId
       `,
       [...transferStateChangeIds, ...transferIds],
-    )) as KnexRawResult;
+    ).timeout(this.deps.queryTimeout, { cancel: true })) as KnexRawResult;
 
     return rawResult[0];
   }
@@ -245,7 +245,7 @@ export class TransferAggregator implements IAggregator {
       ORDER BY ppc.transferStateChangeId, ppc.participantPositionChangeId
       `,
       transferStateChangeIds,
-    )) as [PositionChangeRecord[], unknown];
+    ).timeout(this.deps.queryTimeout, { cancel: true })) as [PositionChangeRecord[], unknown];
 
     return rawResult[0];
   }
@@ -365,7 +365,8 @@ export class TransferAggregator implements IAggregator {
           .select('transferId', 'transferStateChangeId')
           .where('transferStateChangeId', '>', lastId)
           .orderBy('transferStateChangeId')
-          .limit(this.deps.batchSize);
+          .limit(this.deps.batchSize)
+          .timeout(this.deps.queryTimeout, { cancel: true });
 
         if (!transferStateChanges.length) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
@@ -380,6 +381,8 @@ export class TransferAggregator implements IAggregator {
           const currentStateId = transferStateChange.transferStateChangeId;
           if ((currentStateId - newLastId) > 1) {
             this.deps.logger.info(`Gap detected between ${newLastId} and ${currentStateId}`);
+            // If stateIds are not contiguous, if some rows are left behind in the query,
+            // we will cut off the processing here and wait until maxWaitCount is reached
             if (waitCount < this.deps.maxWaitCount) break;
           }
 
@@ -388,6 +391,9 @@ export class TransferAggregator implements IAggregator {
           newLastId = currentStateId;
         }
 
+        // If the remaining batch is not up to the min batch percentage, we will wait and poll again
+        // Because we don't want to poll frequently and stress the system
+        // minBatchPercentage is configurable with env var
         const currentBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
         if (currentBatchPercentage < this.deps.minBatchPercentage) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
@@ -396,7 +402,9 @@ export class TransferAggregator implements IAggregator {
           continue;
         }
 
+        // Remove repetitive transferIds using new Set() constructor
         batchTransferIds = [...new Set(batchTransferIds)];
+
         this.transferStateChangeIdByTransferId = new Map(
           selectedTransferStateChanges.map((row) => [row.transferId, row.transferStateChangeId]),
         );
@@ -452,7 +460,14 @@ export class TransferAggregator implements IAggregator {
           }));
 
           try {
-            await this.deps.transactionModel.bulkWrite(bulkOps);
+            const BULK_WRITE_SIZE = this.deps.bulkWriteSize;
+
+            for (let i = 0; i < bulkOps.length; i += BULK_WRITE_SIZE) {
+              const batch = bulkOps.slice(i, i + BULK_WRITE_SIZE);
+              await this.deps.transactionModel.bulkWrite(batch, {
+                timeoutMS: this.deps.bulkWriteTimeout
+              });
+            }
           } catch (error) {
             this.deps.logger.error(`Bulk upsert failed for ${this.processName}`, error);
             throw error;
@@ -466,6 +481,7 @@ export class TransferAggregator implements IAggregator {
           { upsert: true },
         );
         lastId = newLastId;
+        // Reset the wait count for the next batch
         waitCount = 0;
 
         this.deps.logger.info(`Processed up to transferStateChangeId ${lastId}`);
