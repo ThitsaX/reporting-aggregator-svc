@@ -16,6 +16,7 @@ export type IAggDeps = {
   stateModel: Model<IState>;
   settlementModel: Model<ISettlement>;
   batchSize: number;
+  transferDetailsBatchSize: number;
   timeout: number;
   minBatchPercentage: number;
   maxWaitCount: number;

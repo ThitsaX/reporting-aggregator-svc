@@ -9,6 +9,7 @@ interface SettlementStateChange {
 
 interface SettlementDetail {
   settlementId: bigint;
+  settlementStateChangeId: number;
   createdAt: Date;
   lastUpdated: Date;
   settlementStatus: string;
@@ -17,6 +18,7 @@ interface SettlementDetail {
 }
 
 interface SettlementWindow {
+  settlementId: bigint;
   settlementWindowId: bigint;
 }
 
@@ -104,6 +106,10 @@ export class SettlementAggregator implements IAggregator {
         // @ts-expect-error { Object is possibly "undefined"}
         let newLastId = settlementStateChanges[settlementStateChanges.length - 1].settlementStateChangeId;
         const mongoBatch = [];
+        const settlementStateChangeIds = settlementStateChanges.map((row) => row.settlementStateChangeId);
+        const settlementIds = [...new Set(settlementStateChanges.map((row) => row.settlementId))];
+        const settlementStateChangePlaceholders = settlementStateChangeIds.map(() => '?').join(',');
+        const settlementPlaceholders = settlementIds.map(() => '?').join(',');
 
         const windowQuery = `
           SELECT 
@@ -111,12 +117,13 @@ export class SettlementAggregator implements IAggregator {
             ssw.settlementWindowId 
           FROM settlement s
           JOIN settlementSettlementWindow ssw ON ssw.settlementId = s.settlementId
-          WHERE s.settlementId = ?
+          WHERE s.settlementId IN (${settlementPlaceholders})
         `;
 
         const detailsQuery = `
           SELECT 
             s.settlementId as settlementId,
+            ssc.settlementStateChangeId as settlementStateChangeId,
             s.createdDate as createdAt,
             ssc.createdDate as lastUpdated,
             ssc.settlementStateId as settlementStatus,
@@ -125,23 +132,30 @@ export class SettlementAggregator implements IAggregator {
           FROM settlementStateChange ssc
           JOIN settlement s ON s.settlementId = ssc.settlementId
           JOIN settlementModel sm ON sm.settlementModelId = s.settlementModelId
-          WHERE ssc.settlementStateId = ? AND ssc.settlementId = ?
+          WHERE ssc.settlementStateChangeId IN (${settlementStateChangePlaceholders})
         `;
 
-        for (const row of settlementStateChanges) {
-          const { settlementId, settlementStateId, settlementStateChangeId } = row;
+        const detailsResult = await this.deps.knexClient.raw(detailsQuery, settlementStateChangeIds);
+        const details = detailsResult[0] as SettlementDetail[];
+        const detailByStateChangeId = new Map(details.map((detail) => [detail.settlementStateChangeId, detail]));
 
-          // Get settlement details
-          const detailsResult = await this.deps.knexClient.raw(detailsQuery, [settlementStateId, settlementId]);
-          const detail: SettlementDetail = detailsResult[0][0];
+        const windowsResult = await this.deps.knexClient.raw(windowQuery, settlementIds);
+        const windows = windowsResult[0] as SettlementWindow[];
+        const windowIdsBySettlementId = new Map<number, bigint[]>();
+        for (const window of windows) {
+          const key = Number(window.settlementId);
+          const existing = windowIdsBySettlementId.get(key) ?? [];
+          existing.push(window.settlementWindowId);
+          windowIdsBySettlementId.set(key, existing);
+        }
+
+        for (const row of settlementStateChanges) {
+          const { settlementId, settlementStateChangeId } = row;
+          const detail = detailByStateChangeId.get(settlementStateChangeId);
           if (!detail) continue;
 
-          // Get settlement windows
-          const windowsResult = await this.deps.knexClient.raw(windowQuery, [settlementId]);
-          const windowIds: bigint[] = windowsResult[0].map((w: SettlementWindow) => w.settlementWindowId);
-
           newLastId = settlementStateChangeId;
-
+          const windowIds = windowIdsBySettlementId.get(settlementId) ?? [];
           const processedData = await this.processRecord(detail, windowIds);
 
           if (processedData) {

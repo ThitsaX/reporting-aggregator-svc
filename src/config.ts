@@ -122,6 +122,12 @@ const config = convict<AppConfig>({
     default: 10000,
     env: 'BATCH_SIZE',
   },
+  TRANSFER_DETAILS_BATCH_SIZE: {
+    doc: 'Number of transferIds to fetch per transfer detail query chunk',
+    format: Number,
+    default: 10000,
+    env: 'TRANSFER_DETAILS_BATCH_SIZE',
+  },
   LOOP_TIMEOUT: {
     doc: 'Loop timeout (in milliseconds) before the next states are fetched.',
     format: Number,
