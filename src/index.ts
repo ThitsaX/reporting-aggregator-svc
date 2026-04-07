@@ -23,6 +23,7 @@ const start = async () => {
     stateModel: StateModel,
     settlementModel: SettlementModel,
     batchSize: config.get('BATCH_SIZE'),
+    transferDetailsBatchSize: config.get('TRANSFER_DETAILS_BATCH_SIZE'),
     timeout: config.get('LOOP_TIMEOUT'),
     minBatchPercentage: config.get('MIN_BATCH_PERCENTAGE'),
     maxWaitCount: config.get('MAX_WAIT_COUNT'),
