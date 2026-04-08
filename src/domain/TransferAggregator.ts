@@ -380,10 +380,13 @@ export class TransferAggregator implements IAggregator {
         for (const transferStateChange of transferStateChanges) {
           const currentStateId = transferStateChange.transferStateChangeId;
           if ((currentStateId - newLastId) > 1) {
-            this.deps.logger.info(`Gap detected between ${newLastId} and ${currentStateId}`);
+            if (waitCount === 0) {
+              this.deps.logger.info(`Gap detected between ${newLastId} and ${currentStateId}`);
+            }
             // If stateIds are not contiguous, if some rows are left behind in the query,
             // we will cut off the processing here and wait until maxWaitCount is reached
             if (waitCount < this.deps.maxWaitCount) break;
+            this.deps.logger.info(`Sync resumed after ${this.deps.timeout}ms * ${this.deps.maxWaitCount} wait at id ${newLastId}`);
           }
 
           batchTransferIds.push(transferStateChange.transferId);
@@ -397,7 +400,6 @@ export class TransferAggregator implements IAggregator {
         const currentBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
         if (currentBatchPercentage < this.deps.minBatchPercentage) {
           await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
-          this.deps.logger.info(`Waited for ${this.deps.timeout}ms at id ${newLastId}`);
           waitCount++;
           continue;
         }
