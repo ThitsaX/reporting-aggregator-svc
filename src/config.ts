@@ -125,7 +125,7 @@ const config = convict<AppConfig>({
   TRANSFER_DETAILS_BATCH_SIZE: {
     doc: 'Number of transferIds to fetch per transfer detail query chunk',
     format: Number,
-    default: 10000,
+    default: 1000,
     env: 'TRANSFER_DETAILS_BATCH_SIZE',
   },
   LOOP_TIMEOUT: {
@@ -139,6 +139,12 @@ const config = convict<AppConfig>({
     format: Number,
     default: 70,
     env: 'MIN_BATCH_PERCENTAGE',
+  },
+  WAIT_TIMEOUT_MS: {
+    doc: 'Timeout before fetching missing id(s)',
+    format: Number,
+    default: 5000,
+    env: 'WAIT_TIMEOUT_MS',
   },
   MAX_WAIT_COUNT: {
     doc: 'Maximum number of times to wait before skipping missing id(s)',

@@ -1,19 +1,11 @@
 import { ITransaction } from '#src/schemas';
 import { IAggregator, IAggDeps, TransferStateChange, Record, KnexRawResult } from '../types';
 
-type PositionChangeRecord = {
-  transferId: string;
-  participantName?: string;
-  currency?: string;
-  ledgerType?: string;
-  dateTime?: Date;
-  updatedPosition?: number;
-  positionChange?: number;
-};
 
 export class TransferAggregator implements IAggregator {
   private isRunning: boolean = false;
   private processName: string;
+  private transferStateChangeIdByTransferId = new Map<string, number>();
 
   constructor(
     private readonly deps: IAggDeps,
@@ -92,18 +84,6 @@ export class TransferAggregator implements IAggregator {
           stateChange.transferStateEnum,
           stateChange.reason ?? '',
           stateChange.dateTime ? new Date(stateChange.dateTime).toISOString() : '',
-        ].join('|'),
-      ),
-      positionChanges: this.mergeUnique(
-        existing.positionChanges,
-        incoming.positionChanges,
-        (positionChange) => [
-          positionChange.participantName ?? '',
-          positionChange.currency ?? '',
-          positionChange.ledgerType ?? '',
-          positionChange.dateTime ? new Date(positionChange.dateTime).toISOString() : '',
-          positionChange.updatedPosition ?? '',
-          positionChange.change ?? '',
         ].join('|'),
       ),
     };
@@ -214,41 +194,39 @@ export class TransferAggregator implements IAggregator {
     return rawResult[0];
   }
 
-  private transferStateChangeIdByTransferId = new Map<string, number>();
+  // private async fetchPositionChanges(transferIds: string[]): Promise<PositionChangeRecord[]> {
+  //   const transferStateChangeIds = transferIds
+  //     .map((transferId) => this.transferStateChangeIdByTransferId.get(transferId))
+  //     .filter((transferStateChangeId): transferStateChangeId is number => transferStateChangeId != null);
 
-  private async fetchPositionChanges(transferIds: string[]): Promise<PositionChangeRecord[]> {
-    const transferStateChangeIds = transferIds
-      .map((transferId) => this.transferStateChangeIdByTransferId.get(transferId))
-      .filter((transferStateChangeId): transferStateChangeId is number => transferStateChangeId != null);
+  //   if (!transferStateChangeIds.length) {
+  //     return [];
+  //   }
 
-    if (!transferStateChangeIds.length) {
-      return [];
-    }
+  //   const stateChangePlaceholders = Array(transferStateChangeIds.length).fill('?').join(',');
+  //   const rawResult = (await this.deps.knexClient.raw(
+  //     `
+  //     SELECT
+  //       tsc.transferId,
+  //       pa.name AS participantName,
+  //       pc3.currencyId AS currency,
+  //       lat.name AS ledgerType,
+  //       ppc.createdDate AS dateTime,
+  //       ppc.value AS updatedPosition,
+  //       ppc.\`change\` AS positionChange
+  //     FROM participantPositionChange ppc
+  //       INNER JOIN transferStateChange tsc ON tsc.transferStateChangeId = ppc.transferStateChangeId
+  //       LEFT JOIN participantCurrency pc3 ON pc3.participantCurrencyId = ppc.participantCurrencyId
+  //       LEFT JOIN participant pa ON pa.participantId = pc3.participantId
+  //       LEFT JOIN ledgerAccountType lat ON lat.ledgerAccountTypeId = pc3.ledgerAccountTypeId
+  //     WHERE ppc.transferStateChangeId IN (${stateChangePlaceholders})
+  //     ORDER BY ppc.transferStateChangeId, ppc.participantPositionChangeId
+  //     `,
+  //     transferStateChangeIds,
+  //   ).timeout(this.deps.queryTimeout, { cancel: true })) as [PositionChangeRecord[], unknown];
 
-    const stateChangePlaceholders = Array(transferStateChangeIds.length).fill('?').join(',');
-    const rawResult = (await this.deps.knexClient.raw(
-      `
-      SELECT
-        tsc.transferId,
-        pa.name AS participantName,
-        pc3.currencyId AS currency,
-        lat.name AS ledgerType,
-        ppc.createdDate AS dateTime,
-        ppc.value AS updatedPosition,
-        ppc.\`change\` AS positionChange
-      FROM participantPositionChange ppc
-        INNER JOIN transferStateChange tsc ON tsc.transferStateChangeId = ppc.transferStateChangeId
-        LEFT JOIN participantCurrency pc3 ON pc3.participantCurrencyId = ppc.participantCurrencyId
-        LEFT JOIN participant pa ON pa.participantId = pc3.participantId
-        LEFT JOIN ledgerAccountType lat ON lat.ledgerAccountTypeId = pc3.ledgerAccountTypeId
-      WHERE ppc.transferStateChangeId IN (${stateChangePlaceholders})
-      ORDER BY ppc.transferStateChangeId, ppc.participantPositionChangeId
-      `,
-      transferStateChangeIds,
-    ).timeout(this.deps.queryTimeout, { cancel: true })) as [PositionChangeRecord[], unknown];
-
-    return rawResult[0];
-  }
+  //   return rawResult[0];
+  // }
 
   private async processRecord(record: Record): Promise<ITransaction | null> {
     if (!record.amount || record.amount <= 0) return null;
@@ -289,18 +267,6 @@ export class TransferAggregator implements IAggregator {
       payeeDFSP: record.payeeDFSP,
       payeeDFSPProxy: record.payeeDFSPProxy,
       payeeDesc: record.payeeDesc,
-      positionChanges: record.positionChangesParticipantName
-        ? [
-          {
-            participantName: record.positionChangesParticipantName,
-            currency: record.positionChangesCurrency,
-            ledgerType: record.positionChangesLedgerType,
-            dateTime: record.positionChangesDateTime,
-            updatedPosition: record.positionChangesUpdatedValue,
-            change: record.positionChangesChange,
-          },
-        ]
-        : [],
       payerParty: {
         partyIdType: record.payerPartyIdType,
         partyIdentifier: record.payerPartyIdentifier,
@@ -386,7 +352,7 @@ export class TransferAggregator implements IAggregator {
             // If stateIds are not contiguous, if some rows are left behind in the query,
             // we will cut off the processing here and wait until maxWaitCount is reached
             if (waitCount < this.deps.maxWaitCount) break;
-            this.deps.logger.info(`Sync resumed after ${this.deps.timeout}ms * ${this.deps.maxWaitCount} wait at id ${newLastId}`);
+            this.deps.logger.info(`Sync resumed after ${this.deps.waitTimeout}ms * ${this.deps.maxWaitCount} wait at id ${newLastId}`);
           }
 
           batchTransferIds.push(transferStateChange.transferId);
@@ -399,7 +365,7 @@ export class TransferAggregator implements IAggregator {
         // minBatchPercentage is configurable with env var
         const currentBatchPercentage = (batchTransferIds.length * 100) / transferStateChanges.length;
         if (currentBatchPercentage < this.deps.minBatchPercentage) {
-          await new Promise((resolve) => setTimeout(resolve, this.deps.timeout));
+          await new Promise((resolve) => setTimeout(resolve, this.deps.waitTimeout));
           waitCount++;
           continue;
         }
@@ -425,31 +391,31 @@ export class TransferAggregator implements IAggregator {
             );
           }
 
-          const positionChanges = await this.fetchPositionChanges(transferIdChunk);
-          for (const positionChange of positionChanges) {
-            const transaction = transactionsByTransferId.get(positionChange.transferId);
-            if (!transaction) continue;
+          // const positionChanges = await this.fetchPositionChanges(transferIdChunk);
+          // for (const positionChange of positionChanges) {
+          //   const transaction = transactionsByTransferId.get(positionChange.transferId);
+          //   if (!transaction) continue;
 
-            transaction.positionChanges = this.mergeUnique(
-              transaction.positionChanges,
-              [{
-                participantName: positionChange.participantName,
-                currency: positionChange.currency,
-                ledgerType: positionChange.ledgerType,
-                dateTime: positionChange.dateTime,
-                updatedPosition: positionChange.updatedPosition,
-                change: positionChange.positionChange,
-              }],
-              (change) => [
-                change.participantName ?? '',
-                change.currency ?? '',
-                change.ledgerType ?? '',
-                change.dateTime ? new Date(change.dateTime).toISOString() : '',
-                change.updatedPosition ?? '',
-                change.change ?? '',
-              ].join('|'),
-            );
-          }
+          //   transaction.positionChanges = this.mergeUnique(
+          //     transaction.positionChanges,
+          //     [{
+          //       participantName: positionChange.participantName,
+          //       currency: positionChange.currency,
+          //       ledgerType: positionChange.ledgerType,
+          //       dateTime: positionChange.dateTime,
+          //       updatedPosition: positionChange.updatedPosition,
+          //       change: positionChange.positionChange,
+          //     }],
+          //     (change) => [
+          //       change.participantName ?? '',
+          //       change.currency ?? '',
+          //       change.ledgerType ?? '',
+          //       change.dateTime ? new Date(change.dateTime).toISOString() : '',
+          //       change.updatedPosition ?? '',
+          //       change.change ?? '',
+          //     ].join('|'),
+          //   );
+          // }
         }
 
         if (transactionsByTransferId.size > 0) {

@@ -26,6 +26,7 @@ const start = async () => {
     transferDetailsBatchSize: config.get('TRANSFER_DETAILS_BATCH_SIZE'),
     timeout: config.get('LOOP_TIMEOUT'),
     minBatchPercentage: config.get('MIN_BATCH_PERCENTAGE'),
+    waitTimeout: config.get('WAIT_TIMEOUT_MS'),
     maxWaitCount: config.get('MAX_WAIT_COUNT'),
     queryTimeout: config.get('REPORTING_MYSQL_DB.QUERY_TIMEOUT_MS'),
     bulkWriteTimeout: config.get('REPORTING_MONGO_DB.BULK_WRITE_TIMEOUT_MS'),

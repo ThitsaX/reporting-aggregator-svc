@@ -39,15 +39,6 @@ interface ITransferTerms {
   ilpPacket: string;
 }
 
-interface IPositionChange {
-  change?: number;
-  currency?: string;
-  dateTime?: Date;
-  ledgerType?: string;
-  participantName?: string;
-  updatedPosition?: number;
-}
-
 interface ICharge {
   chargeType: string;
   sourceAmount: IAmount;
@@ -113,7 +104,6 @@ export interface ITransaction {
   payeeDFSP?: string;
   payeeDFSPProxy?: string;
   payeeDesc: string;
-  positionChanges: Array<IPositionChange>;
   payerParty?: IParty;
   payeeParty?: IParty;
   quoteRequest: IQuoteRequest;
@@ -307,17 +297,6 @@ const TransactionSchema = new Schema<ITransaction>(
     payeeDFSP: { type: String, index: true },
     payeeDFSPProxy: { type: String, index: true },
     payeeDesc: String,
-    positionChanges: [
-      {
-        participantName: String,
-        currency: String,
-        ledgerType: String,
-        dateTime: Date,
-        updatedPosition: Schema.Types.Double,
-        change: Schema.Types.Double,
-        _id: false,
-      },
-    ],
     payerParty: PartySchema,
     payeeParty: PartySchema,
     quoteRequest: QuoteRequestSchema,

@@ -29,6 +29,7 @@ export type AppConfig = {
   TRANSFER_DETAILS_BATCH_SIZE: number;
   LOOP_TIMEOUT: number;
   MIN_BATCH_PERCENTAGE: number;
+  WAIT_TIMEOUT_MS: number;
   MAX_WAIT_COUNT: number;
 };
 
