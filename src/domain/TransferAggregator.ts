@@ -430,12 +430,21 @@ export class TransferAggregator implements IAggregator {
           try {
             const BULK_WRITE_SIZE = this.deps.bulkWriteSize;
 
+            const bwTimes = [];
             for (let i = 0; i < bulkOps.length; i += BULK_WRITE_SIZE) {
               const batch = bulkOps.slice(i, i + BULK_WRITE_SIZE);
+              const bWStartTime = Date.now();
               await this.deps.transactionModel.bulkWrite(batch, {
                 timeoutMS: this.deps.bulkWriteTimeout
               });
+              const bwTimeTaken = Date.now() - bWStartTime;
+              bwTimes.push(bwTimeTaken);
+              this.deps.logger.info(`Mongodb Bulk Write ${bwTimeTaken}ms taken for ${batch.length} batch`);
             }
+
+            const totalTimeTaken = bwTimes.reduce((preValue, curValue) => preValue + curValue, 0);
+            this.deps.logger.info(`Total ${totalTimeTaken}ms taken for ${bulkOps.length}`);
+
           } catch (error) {
             this.deps.logger.error(`Bulk upsert failed for ${this.processName}`, error);
             throw error;
