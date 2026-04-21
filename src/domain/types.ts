@@ -19,7 +19,11 @@ export type IAggDeps = {
   transferDetailsBatchSize: number;
   timeout: number;
   minBatchPercentage: number;
+  waitTimeout: number;
   maxWaitCount: number;
+  queryTimeout: number;
+  bulkWriteTimeout: number;
+  bulkWriteSize: number;
   logger: ILogger;
 };
 

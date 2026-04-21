@@ -46,6 +46,12 @@ const config = convict<AppConfig>({
       default: {},
       env: 'REPORTING_MYSQL_DB_ADDITIONAL_CONNECTION_OPTIONS',
     },
+    QUERY_TIMEOUT_MS: {
+      doc: 'Query timeout for each polling',
+      format: Number,
+      default: 30000,
+      env: 'QUERY_TIMEOUT_MS',
+    },
   },
   REPORTING_MONGO_DB: {
     HOST: {
@@ -79,6 +85,18 @@ const config = convict<AppConfig>({
       default: 'admin',
       env: 'REPORTING_MONGO_DB_DATABASE',
     },
+    BULK_WRITE_TIMEOUT_MS: {
+      doc: 'Operation timeout for killing slow bulk writes',
+      format: Number,
+      default: 30000,
+      env: 'BULK_WRITE_TIMEOUT_MS',
+    },
+    BULK_WRITE_SIZE: {
+      doc: 'Total records in a smaller sub batch to bulk write to mongodb',
+      format: Number,
+      default: 1000,
+      env: 'BULK_WRITE_SIZE',
+    },
     PARAMS: {
       doc: 'Additional parameters for MongoDB connection',
       format: function (val) {
@@ -107,7 +125,7 @@ const config = convict<AppConfig>({
   TRANSFER_DETAILS_BATCH_SIZE: {
     doc: 'Number of transferIds to fetch per transfer detail query chunk',
     format: Number,
-    default: 10000,
+    default: 1000,
     env: 'TRANSFER_DETAILS_BATCH_SIZE',
   },
   LOOP_TIMEOUT: {
@@ -121,6 +139,12 @@ const config = convict<AppConfig>({
     format: Number,
     default: 70,
     env: 'MIN_BATCH_PERCENTAGE',
+  },
+  WAIT_TIMEOUT_MS: {
+    doc: 'Timeout before fetching missing id(s)',
+    format: Number,
+    default: 5000,
+    env: 'WAIT_TIMEOUT_MS',
   },
   MAX_WAIT_COUNT: {
     doc: 'Maximum number of times to wait before skipping missing id(s)',

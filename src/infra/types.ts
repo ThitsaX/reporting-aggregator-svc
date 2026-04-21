@@ -9,6 +9,7 @@ export type AppConfig = {
     USER: string;
     PASSWORD: string;
     SCHEMA: string;
+    QUERY_TIMEOUT_MS: number;
     ADDITIONAL_CONNECTION_OPTIONS?: Record<string, unknown>
   };
   REPORTING_MONGO_DB: {
@@ -17,6 +18,8 @@ export type AppConfig = {
     USER: string;
     PASSWORD: string;
     DATABASE: string;
+    BULK_WRITE_TIMEOUT_MS: number;
+    BULK_WRITE_SIZE: number;
     PARAMS: Record<string, unknown>; // Additional parameters for MongoDB connection
     SSL_ENABLED?: boolean; // Optional, defaults to false
     SSL_VERIFY?: boolean; // Optional, defaults to true
@@ -26,6 +29,7 @@ export type AppConfig = {
   TRANSFER_DETAILS_BATCH_SIZE: number;
   LOOP_TIMEOUT: number;
   MIN_BATCH_PERCENTAGE: number;
+  WAIT_TIMEOUT_MS: number;
   MAX_WAIT_COUNT: number;
 };
 
