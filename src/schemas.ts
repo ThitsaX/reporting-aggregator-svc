@@ -114,6 +114,11 @@ export interface ITransaction {
   };
   createdAt: Date;
   lastUpdated: Date;
+  quoteExtensionFees: Array<IQuoteExtensionFee>;
+}
+
+export interface IQuoteExtensionFee extends IAmount {
+  feeType: string;
 }
 
 interface ISettlementStateChange {
@@ -305,6 +310,14 @@ const TransactionSchema = new Schema<ITransaction>(
       payer: ConversionSchema,
       payee: ConversionSchema,
     },
+    quoteExtensionFees: [
+      {
+        feeType: String,
+        currency: String,
+        amount: Schema.Types.Double,
+        _id: false,
+      },
+    ],
   },
   { collection: 'transaction', versionKey: false, timestamps: false },
 );

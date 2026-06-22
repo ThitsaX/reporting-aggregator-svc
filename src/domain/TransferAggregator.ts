@@ -1,5 +1,5 @@
-import { ITransaction } from '#src/schemas';
-import { IAggregator, IAggDeps, TransferStateChange, Record, KnexRawResult } from '../types';
+import { ITransaction, IQuoteExtensionFee } from '#src/schemas';
+import { IAggregator, IAggDeps, TransferStateChange, Record, KnexRawResult, QuoteExtensionFeeRecord, QUOTE_EXT_KEYS } from '../types';
 
 
 export class TransferAggregator implements IAggregator {
@@ -72,23 +72,6 @@ export class TransferAggregator implements IAggregator {
     return merged;
   }
 
-  private mergeTransaction(existing: ITransaction, incoming: ITransaction): ITransaction {
-    return {
-      ...existing,
-      ...incoming,
-      transferStateChanges: this.mergeUnique(
-        existing.transferStateChanges,
-        incoming.transferStateChanges,
-        (stateChange) => [
-          stateChange.transferState,
-          stateChange.transferStateEnum,
-          stateChange.reason ?? '',
-          stateChange.dateTime ? new Date(stateChange.dateTime).toISOString() : '',
-        ].join('|'),
-      ),
-    };
-  }
-
   private async fetchTransferDetails(transferIds: string[]): Promise<Record[]> {
     const transferStateChangeIds = transferIds
       .map((transferId) => this.transferStateChangeIdByTransferId.get(transferId))
@@ -98,8 +81,6 @@ export class TransferAggregator implements IAggregator {
       return [];
     }
 
-    const transferPlaceholders = Array(transferIds.length).fill('?').join(',');
-    const stateChangePlaceholders = Array(transferStateChangeIds.length).fill('?').join(',');
     const rawResult = (await this.deps.knexClient.raw(
       `
       SELECT 
@@ -166,7 +147,7 @@ export class TransferAggregator implements IAggregator {
         LEFT JOIN participantCurrency AS pc2 ON pc2.participantCurrencyId = tp2.participantCurrencyId
         INNER JOIN ilpPacket AS ilpp ON ilpp.transferId = transfer.transferId
         LEFT JOIN transferStateChange AS tsc ON tsc.transferId = transfer.transferId
-          AND tsc.transferStateChangeId IN (${stateChangePlaceholders})
+          AND tsc.transferStateChangeId IN (?)
         LEFT JOIN transferState AS ts ON ts.transferStateId = tsc.transferStateId
         LEFT JOIN transferFulfilment AS tf ON tf.transferId = transfer.transferId
         LEFT JOIN transferError AS te ON te.transferId = transfer.transferId
@@ -183,52 +164,37 @@ export class TransferAggregator implements IAggregator {
         INNER JOIN quoteResponse AS qr ON qr.quoteId = q.quoteId
         INNER JOIN amountType at2 ON q.amountTypeId = at2.amountTypeId
         LEFT JOIN geoCode gc ON gc.quotePartyId = qp2.quotePartyId
-      WHERE transfer.transferId IN (${transferPlaceholders})
+      WHERE transfer.transferId IN (?)
         AND tprt1.name = 'PAYER_DFSP'
         AND tprt2.name = 'PAYEE_DFSP'
       ORDER BY tsc.transferStateChangeId
       `,
-      [...transferStateChangeIds, ...transferIds],
+      [transferStateChangeIds, transferIds],
     ).timeout(this.deps.queryTimeout, { cancel: true })) as KnexRawResult;
 
     return rawResult[0];
   }
 
-  // private async fetchPositionChanges(transferIds: string[]): Promise<PositionChangeRecord[]> {
-  //   const transferStateChangeIds = transferIds
-  //     .map((transferId) => this.transferStateChangeIdByTransferId.get(transferId))
-  //     .filter((transferStateChangeId): transferStateChangeId is number => transferStateChangeId != null);
+  private async fetchQuoteExtensionFees(transferIds: string[]): Promise<QuoteExtensionFeeRecord[]> {
+    const rawResult = await this.deps.knexClient.raw(
+      `
+      SELECT 
+        transfer.transferId,
+        q.currencyId as quoteRequestCurrency,
+        qe.key as quoteExtKey,
+        qe.value as quoteExtValue
+        FROM transfer
+        INNER JOIN quote AS q ON q.transactionReferenceId = transfer.transferId
+        LEFT JOIN quoteExtension qe ON qe.quoteId = q.quoteId
+        WHERE transfer.transferId IN (?)
+      `,
+      [transferIds]
+    ).timeout(this.deps.queryTimeout, { cancel: true });
 
-  //   if (!transferStateChangeIds.length) {
-  //     return [];
-  //   }
+    return rawResult[0];
+  }
 
-  //   const stateChangePlaceholders = Array(transferStateChangeIds.length).fill('?').join(',');
-  //   const rawResult = (await this.deps.knexClient.raw(
-  //     `
-  //     SELECT
-  //       tsc.transferId,
-  //       pa.name AS participantName,
-  //       pc3.currencyId AS currency,
-  //       lat.name AS ledgerType,
-  //       ppc.createdDate AS dateTime,
-  //       ppc.value AS updatedPosition,
-  //       ppc.\`change\` AS positionChange
-  //     FROM participantPositionChange ppc
-  //       INNER JOIN transferStateChange tsc ON tsc.transferStateChangeId = ppc.transferStateChangeId
-  //       LEFT JOIN participantCurrency pc3 ON pc3.participantCurrencyId = ppc.participantCurrencyId
-  //       LEFT JOIN participant pa ON pa.participantId = pc3.participantId
-  //       LEFT JOIN ledgerAccountType lat ON lat.ledgerAccountTypeId = pc3.ledgerAccountTypeId
-  //     WHERE ppc.transferStateChangeId IN (${stateChangePlaceholders})
-  //     ORDER BY ppc.transferStateChangeId, ppc.participantPositionChangeId
-  //     `,
-  //     transferStateChangeIds,
-  //   ).timeout(this.deps.queryTimeout, { cancel: true })) as [PositionChangeRecord[], unknown];
-
-  //   return rawResult[0];
-  // }
-
-  private async processRecord(record: Record): Promise<ITransaction | null> {
+  private processRecord(record: Record): ITransaction | null {
     if (!record.amount || record.amount <= 0) return null;
 
     const stateChange = {
@@ -315,6 +281,20 @@ export class TransferAggregator implements IAggregator {
         },
         ilpPacket: record.ilpPacket,
       },
+      quoteExtensionFees: [],
+    };
+  }
+
+  private processQuoteExtRecord(record: QuoteExtensionFeeRecord, quoteExtKeyArray: string[]): IQuoteExtensionFee & { transferId: string } | null {
+    if (!quoteExtKeyArray.includes(record.quoteExtKey as QUOTE_EXT_KEYS)) {
+      return null;
+    }
+
+    return {
+      transferId: record.transferId,
+      feeType: record.quoteExtKey,
+      currency: record.quoteRequestCurrency,
+      amount: record.quoteExtValue,
     };
   }
 
@@ -381,41 +361,30 @@ export class TransferAggregator implements IAggregator {
         for (const transferIdChunk of this.chunkTransferIds(batchTransferIds)) {
           const records = await this.fetchTransferDetails(transferIdChunk);
           for (const record of records) {
-            const processedData = await this.processRecord(record);
-            if (!processedData) continue;
-
-            const existingTransaction = transactionsByTransferId.get(processedData.transferId);
-            transactionsByTransferId.set(
-              processedData.transferId,
-              existingTransaction ? this.mergeTransaction(existingTransaction, processedData) : processedData,
-            );
+            const processedData = this.processRecord(record);
+            if (processedData) {
+              transactionsByTransferId.set(processedData.transferId, processedData);
+            }
           }
 
-          // const positionChanges = await this.fetchPositionChanges(transferIdChunk);
-          // for (const positionChange of positionChanges) {
-          //   const transaction = transactionsByTransferId.get(positionChange.transferId);
-          //   if (!transaction) continue;
+          // Then we will fetch quote extension fees
+          const quoteExtRecords = await this.fetchQuoteExtensionFees(transferIdChunk);
+          for (const record of quoteExtRecords) {
+            const quoteExtKeyArray = Object.values(QUOTE_EXT_KEYS);
+            const processedData = this.processQuoteExtRecord(record, quoteExtKeyArray);
+            if (!processedData) {
+              continue;
+            }
 
-          //   transaction.positionChanges = this.mergeUnique(
-          //     transaction.positionChanges,
-          //     [{
-          //       participantName: positionChange.participantName,
-          //       currency: positionChange.currency,
-          //       ledgerType: positionChange.ledgerType,
-          //       dateTime: positionChange.dateTime,
-          //       updatedPosition: positionChange.updatedPosition,
-          //       change: positionChange.positionChange,
-          //     }],
-          //     (change) => [
-          //       change.participantName ?? '',
-          //       change.currency ?? '',
-          //       change.ledgerType ?? '',
-          //       change.dateTime ? new Date(change.dateTime).toISOString() : '',
-          //       change.updatedPosition ?? '',
-          //       change.change ?? '',
-          //     ].join('|'),
-          //   );
-          // }
+            const existingRecord = transactionsByTransferId.get(processedData.transferId);
+            if (existingRecord && existingRecord.quoteExtensionFees) {
+              existingRecord.quoteExtensionFees.push({
+                feeType: processedData.feeType,
+                currency: processedData.currency,
+                amount: processedData.amount,
+              });
+            }
+          }
         }
 
         if (transactionsByTransferId.size > 0) {

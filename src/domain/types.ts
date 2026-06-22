@@ -95,5 +95,18 @@ export interface Record {
   geoCodeLongitude?: number;
 }
 
+export interface QuoteExtensionFeeRecord {
+  transferId: string;
+  quoteRequestCurrency: string;
+  quoteExtKey: string;
+  quoteExtValue: number;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type KnexRawResult = [Record[], any];
+
+export enum QUOTE_EXT_KEYS {
+  PAYER_FEE = 'payerFee',
+  PAYEE_FEE = 'payeeFee',
+  SCHEME_FEE = 'schemeFee'
+}
