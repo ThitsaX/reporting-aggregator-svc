@@ -279,7 +279,7 @@ const TransactionSchema = new Schema<ITransaction>(
     targetCurrency: { type: String, index: true },
     createdAt: { type: Date, index: true },
     baseUseCase: String,
-    lastUpdated: Date,
+    lastUpdated: { type: Date, index: true },
     transferState: { type: String, index: true },
     transferStateEnum: { type: String, index: true },
     transferStateChanges: [

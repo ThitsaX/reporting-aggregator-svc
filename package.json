@@ -1,6 +1,6 @@
 {
   "name": "reporting-aggregator-svc",
-  "version": "0.0.9",
+  "version": "0.0.13",
   "private": true,
   "description": "A Mojaloop reporting service that aggregates transactional data from MySQL by joining multiple tables and composes denormalized records into MongoDB for efficient reporting",
   "author": "Ujjwal Panwar",
@@ -13,6 +13,8 @@
     "start": "node dist/index.js",
     "start:build": "npm run build && npm start",
     "start:dev": "ts-node -r dotenv/config -P ./tsconfig.json src/index.ts",
+    "create:index": "ts-node -r dotenv/config -P ./tsconfig.json src/scripts/createTransactionIndex.ts",
+    "query:test": "ts-node -r dotenv/config -P ./tsconfig.json src/scripts/queryTest.ts",
     "test": "npm run test:unit",
     "test:unit": "jest --testMatch='**/unit/**/*.test.ts'",
     "test:xunit": "JEST_JUNIT_OUTPUT_DIR=./test/reports/ JEST_JUNIT_OUTPUT_NAME=xunit.xml npm run test:unit -- --reporters=jest-junit",
