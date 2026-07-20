@@ -69,6 +69,12 @@ export class FxTransferAggregator implements IAggregator {
       return;
     }
 
+    // Check if the aggregator is paused
+    if (this.deps.pauseFxTransferAggregator) {
+      this.deps.logger.info('FxTransfer Aggregator is paused. To resume, change env PAUSE_FXTRANSFER_AGGREGATOR to false and restart the service');
+      return;
+    }
+
     this.isRunning = true;
     this.deps.logger.info('FxTransfer Aggregator is started');
 

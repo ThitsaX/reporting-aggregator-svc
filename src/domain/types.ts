@@ -15,6 +15,9 @@ export type IAggDeps = {
   transactionModel: Model<ITransaction>;
   stateModel: Model<IState>;
   settlementModel: Model<ISettlement>;
+  pauseTransferAggregator: boolean;
+  pauseSettlementAggregator: boolean;
+  pauseFxTransferAggregator: boolean;
   batchSize: number;
   transferDetailsBatchSize: number;
   timeout: number;

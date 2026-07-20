@@ -25,6 +25,9 @@ export type AppConfig = {
     SSL_VERIFY?: boolean; // Optional, defaults to true
     SSL_CA_FILE_PATH?: string; // Optional, CA certificate file path
   };
+  PAUSE_TRANSFER_AGGREGATOR: boolean;
+  PAUSE_SETTLEMENT_AGGREGATOR: boolean;
+  PAUSE_FXTRANSFER_AGGREGATOR: boolean;
   BATCH_SIZE: number;
   TRANSFER_DETAILS_BATCH_SIZE: number;
   LOOP_TIMEOUT: number;
