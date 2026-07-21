@@ -116,6 +116,24 @@ const config = convict<AppConfig>({
       env: 'REPORTING_MONGO_DB_PARAMS',
     },
   },
+  PAUSE_TRANSFER_AGGREGATOR: {
+    doc: 'Option to pause transfer_aggregator for debugging purposes',
+    format: Boolean,
+    default: false,
+    env: 'PAUSE_TRANSFER_AGGREGATOR',
+  },
+  PAUSE_SETTLEMENT_AGGREGATOR: {
+    doc: 'Option to pause settlement_aggregator for debugging purposes',
+    format: Boolean,
+    default: false,
+    env: 'PAUSE_SETTLEMENT_AGGREGATOR',
+  },
+  PAUSE_FXTRANSFER_AGGREGATOR: {
+    doc: 'Option to pause fxtransfer_aggregator for debugging purposes',
+    format: Boolean,
+    default: false,
+    env: 'PAUSE_FXTRANSFER_AGGREGATOR',
+  },
   BATCH_SIZE: {
     doc: 'Number of transferStateChangeIds to process per batch',
     format: Number,

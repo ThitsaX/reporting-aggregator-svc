@@ -20,6 +20,12 @@ export class TransferAggregator implements IAggregator {
       return;
     }
 
+    // Check if the aggregator is paused
+    if (this.deps.pauseTransferAggregator) {
+      this.deps.logger.info('Transfer Aggregator is paused. To resume, change env PAUSE_TRANSFER_AGGREGATOR to false and restart the service');
+      return;
+    }
+
     this.isRunning = true;
     this.deps.logger.info('Transfer Aggregator is started');
 

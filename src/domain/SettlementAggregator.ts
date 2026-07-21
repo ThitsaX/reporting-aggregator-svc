@@ -39,6 +39,12 @@ export class SettlementAggregator implements IAggregator {
       return;
     }
 
+    // Check if the aggregator is paused
+    if (this.deps.pauseSettlementAggregator) {
+      this.deps.logger.info('Settlement Aggregator is paused. To resume, change env PAUSE_SETTLEMENT_AGGREGATOR to false and restart the service');
+      return;
+    }
+
     this.isRunning = true;
     this.deps.logger.info('Settlement Aggregator is started');
 
